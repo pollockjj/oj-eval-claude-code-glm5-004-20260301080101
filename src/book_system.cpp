@@ -7,12 +7,13 @@
 #include <algorithm>
 #include <set>
 #include <ctime>
+#include <map>
 
 // Book index files
 class BookIndex {
 private:
     std::string filename_;
-    std::vector<std::pair<std::string, int>> index_; // key -> position
+    std::map<std::string, std::set<int>> index_; // key -> set of positions
 
     void load() {
         index_.clear();
@@ -26,15 +27,17 @@ private:
             if (space == std::string::npos) continue;
             std::string key = line.substr(0, space);
             int pos = std::stoi(line.substr(space + 1));
-            index_.push_back({key, pos});
+            index_[key].insert(pos);
         }
         file.close();
     }
 
     void save() {
         std::ofstream file(filename_);
-        for (const auto& p : index_) {
-            file << p.first << " " << p.second << "\n";
+        for (const auto& entry : index_) {
+            for (int pos : entry.second) {
+                file << entry.first << " " << pos << "\n";
+            }
         }
         file.close();
     }
@@ -44,36 +47,59 @@ public:
         load();
     }
 
-    std::vector<int> findAll(const std::string& key) {
-        std::vector<int> result;
-        for (const auto& p : index_) {
-            if (p.first == key) result.push_back(p.second);
+    std::set<int> findAll(const std::string& key) {
+        auto it = index_.find(key);
+        if (it != index_.end()) return it->second;
+        return {};
+    }
+
+    int findFirst(const std::string& key) {
+        auto it = index_.find(key);
+        if (it != index_.end() && !it->second.empty()) {
+            return *it->second.begin();
         }
-        return result;
+        return -1;
     }
 
     void insert(const std::string& key, int pos) {
-        index_.push_back({key, pos});
+        index_[key].insert(pos);
         save();
     }
 
     void update(const std::string& old_key, const std::string& new_key, int pos) {
-        for (auto& p : index_) {
-            if (p.first == old_key && p.second == pos) {
-                p.first = new_key;
-                save();
-                return;
+        auto it = index_.find(old_key);
+        if (it != index_.end()) {
+            it->second.erase(pos);
+            if (it->second.empty()) {
+                index_.erase(it);
             }
+        }
+        index_[new_key].insert(pos);
+        save();
+    }
+
+    void remove(const std::string& key, int pos) {
+        auto it = index_.find(key);
+        if (it != index_.end()) {
+            it->second.erase(pos);
+            if (it->second.empty()) {
+                index_.erase(it);
+            }
+            save();
         }
     }
 
-    void remove(int pos) {
-        auto it = std::remove_if(index_.begin(), index_.end(),
-            [&](const std::pair<std::string, int>& p) { return p.second == pos; });
-        if (it != index_.end()) {
-            index_.erase(it, index_.end());
-            save();
+    void clear(int pos) {
+        // Remove all entries for this position
+        for (auto it = index_.begin(); it != index_.end(); ) {
+            it->second.erase(pos);
+            if (it->second.empty()) {
+                it = index_.erase(it);
+            } else {
+                ++it;
+            }
         }
+        save();
     }
 };
 
@@ -86,6 +112,9 @@ static BookIndex* g_author_index = nullptr;
 static BookIndex* g_keyword_index = nullptr;
 static std::ofstream* g_log_file = nullptr;
 static std::string g_log_filename = "bookstore.log";
+
+// Map to store book positions by ISBN for selected books
+static std::map<std::string, int> g_book_positions;
 
 BookSystem::BookSystem(AccountSystem* account_system)
     : account_system_(account_system),
@@ -135,7 +164,7 @@ bool BookSystem::parseKeywords(const std::string& kw_str, std::vector<std::strin
     size_t start = 0, end;
     while ((end = kw.find('|', start)) != std::string::npos) {
         std::string segment = kw.substr(start, end - start);
-        if (segment.empty()) return false; // Empty segment
+        if (segment.empty()) return false;
         keywords.push_back(segment);
         start = end + 1;
     }
@@ -153,30 +182,46 @@ bool BookSystem::hasDuplicateKeywords(const std::string& kw_str) {
     return unique_kw.size() != keywords.size();
 }
 
+// Helper function to find book position by ISBN
+static int findBookPositionByISBN(const std::string& isbn) {
+    auto positions = g_isbn_index->findAll(isbn);
+    for (int pos : positions) {
+        Book book;
+        if (g_book_storage->read(pos, book) && book.isbn.str() == isbn) {
+            return pos;
+        }
+    }
+    return -1;
+}
+
+// Helper function to get book by position
+static bool getBookByPosition(int pos, Book& book) {
+    if (pos < 0) return false;
+    return g_book_storage->read(pos, book);
+}
+
 std::vector<Book> BookSystem::showBooks(const std::string& isbn_filter,
                                         const std::string& name_filter,
                                         const std::string& author_filter,
                                         const std::string& keyword_filter) {
     std::vector<Book> result;
+    std::set<int> candidate_positions;
 
     // If no filter, return all books sorted by ISBN
     if (isbn_filter.empty() && name_filter.empty() &&
         author_filter.empty() && keyword_filter.empty()) {
+        // Get all books and check which ones are valid (have ISBN in index)
         std::vector<Book> all_books = g_book_storage->getAll();
-        // Filter by index
-        for (const auto& book : all_books) {
-            bool found = false;
-            // Check ISBN index
-            auto isbn_positions = g_isbn_index->findAll(book.isbn.str());
-            for (int pos : isbn_positions) {
+        for (size_t i = 0; i < all_books.size(); i++) {
+            Book book = all_books[i];
+            // Verify book exists in ISBN index
+            auto positions = g_isbn_index->findAll(book.isbn.str());
+            for (int pos : positions) {
                 Book stored;
                 if (g_book_storage->read(pos, stored) && stored.isbn.str() == book.isbn.str()) {
-                    found = true;
+                    result.push_back(book);
                     break;
                 }
-            }
-            if (found) {
-                result.push_back(book);
             }
         }
         // Sort by ISBN
@@ -185,61 +230,63 @@ std::vector<Book> BookSystem::showBooks(const std::string& isbn_filter,
         return result;
     }
 
-    std::set<int> positions;
-
-    // Filter by ISBN
+    // Start with ISBN filter if present
     if (!isbn_filter.empty()) {
-        auto pos = g_isbn_index->findAll(isbn_filter);
-        positions.insert(pos.begin(), pos.end());
+        candidate_positions = g_isbn_index->findAll(isbn_filter);
     }
 
     // Filter by name
     if (!name_filter.empty()) {
-        auto pos = g_name_index->findAll(name_filter);
-        if (positions.empty()) {
-            positions.insert(pos.begin(), pos.end());
+        auto name_positions = g_name_index->findAll(name_filter);
+        if (candidate_positions.empty()) {
+            candidate_positions = name_positions;
         } else {
             std::set<int> intersection;
-            for (int p : pos) {
-                if (positions.count(p)) intersection.insert(p);
+            for (int p : candidate_positions) {
+                if (name_positions.count(p)) intersection.insert(p);
             }
-            positions = intersection;
+            candidate_positions = intersection;
         }
     }
 
     // Filter by author
     if (!author_filter.empty()) {
-        auto pos = g_author_index->findAll(author_filter);
-        if (positions.empty()) {
-            positions.insert(pos.begin(), pos.end());
+        auto author_positions = g_author_index->findAll(author_filter);
+        if (candidate_positions.empty()) {
+            candidate_positions = author_positions;
         } else {
             std::set<int> intersection;
-            for (int p : pos) {
-                if (positions.count(p)) intersection.insert(p);
+            for (int p : candidate_positions) {
+                if (author_positions.count(p)) intersection.insert(p);
             }
-            positions = intersection;
+            candidate_positions = intersection;
         }
     }
 
     // Filter by keyword
     if (!keyword_filter.empty()) {
-        auto pos = g_keyword_index->findAll(keyword_filter);
-        if (positions.empty()) {
-            positions.insert(pos.begin(), pos.end());
+        auto keyword_positions = g_keyword_index->findAll(keyword_filter);
+        if (candidate_positions.empty()) {
+            candidate_positions = keyword_positions;
         } else {
             std::set<int> intersection;
-            for (int p : pos) {
-                if (positions.count(p)) intersection.insert(p);
+            for (int p : candidate_positions) {
+                if (keyword_positions.count(p)) intersection.insert(p);
             }
-            positions = intersection;
+            candidate_positions = intersection;
         }
     }
 
-    // Get books from positions
-    for (int pos : positions) {
+    // Get books from positions and verify
+    std::set<std::string> seen_isbns;
+    for (int pos : candidate_positions) {
         Book book;
         if (g_book_storage->read(pos, book)) {
-            result.push_back(book);
+            // Avoid duplicates
+            if (seen_isbns.find(book.isbn.str()) == seen_isbns.end()) {
+                seen_isbns.insert(book.isbn.str());
+                result.push_back(book);
+            }
         }
     }
 
@@ -251,57 +298,43 @@ std::vector<Book> BookSystem::showBooks(const std::string& isbn_filter,
 }
 
 long long BookSystem::buyBook(const std::string& isbn, long long quantity) {
-    auto positions = g_isbn_index->findAll(isbn);
-    if (positions.empty()) return -1;
+    if (quantity <= 0) return -1;
 
-    for (int pos : positions) {
-        Book book;
-        if (g_book_storage->read(pos, book)) {
-            if (book.isbn.str() == isbn) {
-                if (book.quantity < quantity) return -1;
+    int pos = findBookPositionByISBN(isbn);
+    if (pos < 0) return -1;
 
-                long long total_cost = book.price_cents * quantity;
-                book.quantity -= quantity;
-                g_book_storage->update(pos, book);
+    Book book;
+    if (!getBookByPosition(pos, book)) return -1;
 
-                // Record finance
-                recordSale(total_cost);
-                return total_cost;
-            }
-        }
-    }
-    return -1;
+    if (book.quantity < quantity) return -1;
+
+    long long total_cost = book.price_cents * quantity;
+    book.quantity -= quantity;
+    g_book_storage->update(pos, book);
+
+    // Record finance
+    recordSale(total_cost);
+    return total_cost;
 }
 
-Book* BookSystem::selectBook(const std::string& isbn) {
-    auto positions = g_isbn_index->findAll(isbn);
+int BookSystem::selectBook(const std::string& isbn) {
+    int pos = findBookPositionByISBN(isbn);
 
-    // Check if book exists
-    for (int pos : positions) {
-        Book book;
-        if (g_book_storage->read(pos, book) && book.isbn.str() == isbn) {
-            account_system_->setSelectedBook(isbn);
-            // Return a copy (caller will need to handle this)
-            static Book selected_book;
-            selected_book = book;
-            return &selected_book;
-        }
+    if (pos < 0) {
+        // Create new book with only ISBN
+        Book new_book;
+        new_book.isbn = FixedString<Book::ISBN_SIZE - 1>(isbn);
+        pos = g_book_storage->write(new_book);
+        g_isbn_index->insert(isbn, pos);
     }
-
-    // Create new book with only ISBN
-    Book new_book;
-    new_book.isbn = FixedString<Book::ISBN_SIZE - 1>(isbn);
-    int pos = g_book_storage->write(new_book);
-    g_isbn_index->insert(isbn, pos);
 
     account_system_->setSelectedBook(isbn);
+    g_book_positions[isbn] = pos;
 
-    static Book selected_book;
-    selected_book = new_book;
-    return &selected_book;
+    return pos;
 }
 
-bool BookSystem::modifyBook(Book& book, const std::string& new_isbn,
+bool BookSystem::modifyBook(const std::string& isbn, const std::string& new_isbn,
                            const std::string& new_name,
                            const std::string& new_author,
                            const std::string& new_keywords,
@@ -309,34 +342,23 @@ bool BookSystem::modifyBook(Book& book, const std::string& new_isbn,
                            bool has_isbn, bool has_name, bool has_author,
                            bool has_keywords, bool has_price) {
     // Find the book position
-    auto positions = g_isbn_index->findAll(book.isbn.str());
-    int book_pos = -1;
-    for (int pos : positions) {
-        Book stored;
-        if (g_book_storage->read(pos, stored) && stored.isbn.str() == book.isbn.str()) {
-            book_pos = pos;
-            break;
-        }
-    }
+    int book_pos = findBookPositionByISBN(isbn);
     if (book_pos < 0) return false;
 
-    // Get old values for index updates
+    // Get the book
+    Book book;
+    if (!getBookByPosition(book_pos, book)) return false;
+
     std::string old_isbn = book.isbn.str();
-    std::string old_name = book.name.str();
-    std::string old_author = book.author.str();
-    std::string old_keywords = book.keywords.str();
 
     // Check for ISBN change to same value
     if (has_isbn && new_isbn == old_isbn) return false;
 
     // Check for ISBN change to existing ISBN
     if (has_isbn) {
-        auto existing = g_isbn_index->findAll(new_isbn);
-        for (int pos : existing) {
-            Book stored;
-            if (g_book_storage->read(pos, stored) && stored.isbn.str() == new_isbn) {
-                return false; // ISBN already exists
-            }
+        int existing_pos = findBookPositionByISBN(new_isbn);
+        if (existing_pos >= 0 && existing_pos != book_pos) {
+            return false; // ISBN already exists
         }
     }
 
@@ -344,6 +366,11 @@ bool BookSystem::modifyBook(Book& book, const std::string& new_isbn,
     if (has_keywords && !new_keywords.empty()) {
         if (hasDuplicateKeywords(new_keywords)) return false;
     }
+
+    // Get old values for index updates
+    std::string old_name = book.name.str();
+    std::string old_author = book.author.str();
+    std::string old_keywords = book.keywords.str();
 
     // Update book
     if (has_isbn) book.isbn = FixedString<Book::ISBN_SIZE - 1>(new_isbn);
@@ -358,49 +385,48 @@ bool BookSystem::modifyBook(Book& book, const std::string& new_isbn,
     // Update indexes
     if (has_isbn && new_isbn != old_isbn) {
         g_isbn_index->update(old_isbn, new_isbn, book_pos);
+        // Update selected book tracking
+        account_system_->setSelectedBook(new_isbn);
+        g_book_positions.erase(old_isbn);
+        g_book_positions[new_isbn] = book_pos;
     }
-    if (has_name && new_name != old_name) {
-        g_name_index->remove(book_pos);
+    if (has_name) {
+        if (!old_name.empty()) g_name_index->remove(old_name, book_pos);
         if (!new_name.empty()) g_name_index->insert(new_name, book_pos);
     }
-    if (has_author && new_author != old_author) {
-        g_author_index->remove(book_pos);
+    if (has_author) {
+        if (!old_author.empty()) g_author_index->remove(old_author, book_pos);
         if (!new_author.empty()) g_author_index->insert(new_author, book_pos);
     }
-    if (has_keywords && new_keywords != old_keywords) {
-        g_keyword_index->remove(book_pos);
+    if (has_keywords) {
+        // Remove old keywords
+        std::vector<std::string> old_kw_list;
+        parseKeywords(old_keywords, old_kw_list);
+        for (const auto& kw : old_kw_list) {
+            g_keyword_index->remove(kw, book_pos);
+        }
         // Insert new keywords
-        std::vector<std::string> kw_list;
-        parseKeywords(new_keywords, kw_list);
-        for (const auto& kw : kw_list) {
+        std::vector<std::string> new_kw_list;
+        parseKeywords(new_keywords, new_kw_list);
+        for (const auto& kw : new_kw_list) {
             g_keyword_index->insert(kw, book_pos);
         }
-    }
-
-    // Update session selected book
-    if (has_isbn) {
-        account_system_->setSelectedBook(new_isbn);
     }
 
     return true;
 }
 
-bool BookSystem::importBook(Book& book, long long quantity, long long total_cost) {
+bool BookSystem::importBook(const std::string& isbn, long long quantity, long long total_cost) {
     if (quantity <= 0 || total_cost <= 0) return false;
 
-    auto positions = g_isbn_index->findAll(book.isbn.str());
-    int book_pos = -1;
-    for (int pos : positions) {
-        Book stored;
-        if (g_book_storage->read(pos, stored) && stored.isbn.str() == book.isbn.str()) {
-            book_pos = pos;
-            break;
-        }
-    }
+    int book_pos = findBookPositionByISBN(isbn);
     if (book_pos < 0) return false;
 
-    book.quantity += quantity;
-    g_book_storage->update(book_pos, book);
+    Book stored_book;
+    if (!getBookByPosition(book_pos, stored_book)) return false;
+
+    stored_book.quantity += quantity;
+    g_book_storage->update(book_pos, stored_book);
 
     // Record finance (import is expense)
     recordImport(total_cost);
@@ -413,16 +439,11 @@ void BookSystem::recordSale(long long amount_cents) {
     record.income_cents = amount_cents;
     record.expense_cents = 0;
 
-    time_t now = time(nullptr);
-    char* time_str = ctime(&now);
-    if (time_str) record.time_info = time_str;
+    g_finance_storage->write(record);
 
     std::stringstream ss;
     ss << "SALE: +" << (amount_cents / 100) << "." << std::setfill('0') << std::setw(2) << (amount_cents % 100);
-    record.operation_info = ss.str();
-
-    g_finance_storage->write(record);
-    logOperation(record.operation_info);
+    logOperation(ss.str());
 }
 
 void BookSystem::recordImport(long long amount_cents) {
@@ -430,16 +451,11 @@ void BookSystem::recordImport(long long amount_cents) {
     record.income_cents = 0;
     record.expense_cents = amount_cents;
 
-    time_t now = time(nullptr);
-    char* time_str = ctime(&now);
-    if (time_str) record.time_info = time_str;
+    g_finance_storage->write(record);
 
     std::stringstream ss;
     ss << "IMPORT: -" << (amount_cents / 100) << "." << std::setfill('0') << std::setw(2) << (amount_cents % 100);
-    record.operation_info = ss.str();
-
-    g_finance_storage->write(record);
-    logOperation(record.operation_info);
+    logOperation(ss.str());
 }
 
 std::pair<long long, long long> BookSystem::getFinance(int count) {
@@ -448,6 +464,15 @@ std::pair<long long, long long> BookSystem::getFinance(int count) {
 
     auto all_records = g_finance_storage->getAll();
     int total = all_records.size();
+
+    if (count == -1) {
+        // Return all transactions
+        for (const auto& record : all_records) {
+            total_income += record.income_cents;
+            total_expense += record.expense_cents;
+        }
+        return {total_income, total_expense};
+    }
 
     if (count > total) {
         // Operation fails

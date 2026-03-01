@@ -532,14 +532,8 @@ void CommandParser::executeModify(const std::vector<std::string>& tokens) {
         return;
     }
 
-    // Get selected book
-    Book* book = book_system_->selectBook(selected_isbn);
-    if (!book) {
-        std::cout << "Invalid\n";
-        return;
-    }
-
-    if (!book_system_->modifyBook(*book, new_isbn, new_name, new_author, new_keywords, new_price,
+    // Modify selected book
+    if (!book_system_->modifyBook(selected_isbn, new_isbn, new_name, new_author, new_keywords, new_price,
                                   has_isbn, has_name, has_author, has_keywords, has_price)) {
         std::cout << "Invalid\n";
     }
@@ -603,14 +597,8 @@ void CommandParser::executeImport(const std::vector<std::string>& tokens) {
         return;
     }
 
-    // Get selected book
-    Book* book = book_system_->selectBook(selected_isbn);
-    if (!book) {
-        std::cout << "Invalid\n";
-        return;
-    }
-
-    if (!book_system_->importBook(*book, qty, total_cost)) {
+    // Import to selected book
+    if (!book_system_->importBook(selected_isbn, qty, total_cost)) {
         std::cout << "Invalid\n";
     }
 }
