@@ -1,8 +1,20 @@
-[Sun Mar  1 08:31:31 2026
-] User: root - IMPORT: -233.33
-[Sun Mar  1 08:31:31 2026
-] User: user0 - SALE: +1080.00
-[Sun Mar  1 08:31:31 2026
-] User: root - IMPORT: -10.00
-[Sun Mar  1 08:31:31 2026
-] User: user0 - SALE: +1000.00
+[Sun Mar  1 08:35:04 2026
+] User: worker - IMPORT: -233.33
+[Sun Mar  1 08:35:04 2026
+] User: worker - IMPORT: -150.00
+[Sun Mar  1 08:35:04 2026
+] User: user0 - SALE: +190.00
+[Sun Mar  1 08:35:04 2026
+] User: user0 - SALE: +135.00
+[Sun Mar  1 08:35:04 2026
+] User: worker - SALE: +760.00
+[Sun Mar  1 08:35:04 2026
+] User: worker - IMPORT: -200.00
+[Sun Mar  1 08:35:04 2026
+] User: worker - IMPORT: -30.00
+[Sun Mar  1 08:35:04 2026
+] User: worker - SALE: +225.00
+[Sun Mar  1 08:35:04 2026
+] User: root - SALE: +45.00
+[Sun Mar  1 08:35:04 2026
+] User: root - IMPORT: -200.00

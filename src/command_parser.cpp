@@ -610,7 +610,7 @@ void CommandParser::executeShowFinance(const std::vector<std::string>& tokens) {
     }
 
     int count = -1; // -1 means all
-    if (tokens.size() > 2) {
+    if (tokens.size() > 3) {
         std::cout << "Invalid\n";
         return;
     }
