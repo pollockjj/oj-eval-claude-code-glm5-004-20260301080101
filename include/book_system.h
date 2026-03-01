@@ -98,12 +98,12 @@ public:
                                 const std::string& keyword_filter);
     long long buyBook(const std::string& isbn, long long quantity); // Returns total cost in cents
     int selectBook(const std::string& isbn); // Returns position
-    bool modifyBook(const std::string& isbn, const std::string& new_isbn,
+    bool modifyBookByPosition(int book_pos, const std::string& new_isbn,
                    const std::string& new_name, const std::string& new_author,
                    const std::string& new_keywords, const std::string& new_price,
                    bool has_isbn, bool has_name, bool has_author,
                    bool has_keywords, bool has_price);
-    bool importBook(const std::string& isbn, long long quantity, long long total_cost);
+    bool importBookByPosition(int book_pos, long long quantity, long long total_cost);
 
     // Finance operations
     void recordSale(long long amount_cents);

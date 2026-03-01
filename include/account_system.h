@@ -70,12 +70,12 @@ struct Account {
 struct LoginSession {
     std::string user_id;
     int privilege;
-    std::string selected_isbn;
+    int selected_book_pos;  // Store position instead of ISBN
     bool has_selected_book;
 
-    LoginSession() : privilege(0), has_selected_book(false) {}
+    LoginSession() : privilege(0), selected_book_pos(-1), has_selected_book(false) {}
     LoginSession(const std::string& id, int priv)
-        : user_id(id), privilege(priv), has_selected_book(false) {}
+        : user_id(id), privilege(priv), selected_book_pos(-1), has_selected_book(false) {}
 };
 
 class AccountSystem {
@@ -112,8 +112,8 @@ public:
     LoginSession* getCurrentSession();
     int getCurrentPrivilege() const;
     bool isLoggedIn() const;
-    void setSelectedBook(const std::string& isbn);
-    std::string getSelectedBook();
+    void setSelectedBookPosition(int pos);
+    int getSelectedBookPosition();
     void clearSelectedBook();
 
     // Get current user info

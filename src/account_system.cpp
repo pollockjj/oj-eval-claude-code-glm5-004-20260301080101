@@ -229,24 +229,24 @@ bool AccountSystem::isLoggedIn() const {
     return !login_stack_.empty();
 }
 
-void AccountSystem::setSelectedBook(const std::string& isbn) {
+void AccountSystem::setSelectedBookPosition(int pos) {
     if (!login_stack_.empty()) {
-        login_stack_.back().selected_isbn = isbn;
+        login_stack_.back().selected_book_pos = pos;
         login_stack_.back().has_selected_book = true;
     }
 }
 
-std::string AccountSystem::getSelectedBook() {
+int AccountSystem::getSelectedBookPosition() {
     if (login_stack_.empty() || !login_stack_.back().has_selected_book) {
-        return "";
+        return -1;
     }
-    return login_stack_.back().selected_isbn;
+    return login_stack_.back().selected_book_pos;
 }
 
 void AccountSystem::clearSelectedBook() {
     if (!login_stack_.empty()) {
         login_stack_.back().has_selected_book = false;
-        login_stack_.back().selected_isbn = "";
+        login_stack_.back().selected_book_pos = -1;
     }
 }
 

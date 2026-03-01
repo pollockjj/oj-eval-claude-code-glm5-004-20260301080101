@@ -328,23 +328,19 @@ int BookSystem::selectBook(const std::string& isbn) {
         g_isbn_index->insert(isbn, pos);
     }
 
-    account_system_->setSelectedBook(isbn);
+    account_system_->setSelectedBookPosition(pos);
     g_book_positions[isbn] = pos;
 
     return pos;
 }
 
-bool BookSystem::modifyBook(const std::string& isbn, const std::string& new_isbn,
+bool BookSystem::modifyBookByPosition(int book_pos, const std::string& new_isbn,
                            const std::string& new_name,
                            const std::string& new_author,
                            const std::string& new_keywords,
                            const std::string& new_price,
                            bool has_isbn, bool has_name, bool has_author,
                            bool has_keywords, bool has_price) {
-    // Find the book position
-    int book_pos = findBookPositionByISBN(isbn);
-    if (book_pos < 0) return false;
-
     // Get the book
     Book book;
     if (!getBookByPosition(book_pos, book)) return false;
@@ -385,8 +381,6 @@ bool BookSystem::modifyBook(const std::string& isbn, const std::string& new_isbn
     // Update indexes
     if (has_isbn && new_isbn != old_isbn) {
         g_isbn_index->update(old_isbn, new_isbn, book_pos);
-        // Update selected book tracking
-        account_system_->setSelectedBook(new_isbn);
         g_book_positions.erase(old_isbn);
         g_book_positions[new_isbn] = book_pos;
     }
@@ -416,10 +410,8 @@ bool BookSystem::modifyBook(const std::string& isbn, const std::string& new_isbn
     return true;
 }
 
-bool BookSystem::importBook(const std::string& isbn, long long quantity, long long total_cost) {
+bool BookSystem::importBookByPosition(int book_pos, long long quantity, long long total_cost) {
     if (quantity <= 0 || total_cost <= 0) return false;
-
-    int book_pos = findBookPositionByISBN(isbn);
     if (book_pos < 0) return false;
 
     Book stored_book;

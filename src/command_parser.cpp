@@ -495,8 +495,8 @@ void CommandParser::executeModify(const std::vector<std::string>& tokens) {
         return;
     }
 
-    std::string selected_isbn = account_system_->getSelectedBook();
-    if (selected_isbn.empty()) {
+    int selected_pos = account_system_->getSelectedBookPosition();
+    if (selected_pos < 0) {
         std::cout << "Invalid\n";
         return;
     }
@@ -532,8 +532,7 @@ void CommandParser::executeModify(const std::vector<std::string>& tokens) {
         return;
     }
 
-    // Modify selected book
-    if (!book_system_->modifyBook(selected_isbn, new_isbn, new_name, new_author, new_keywords, new_price,
+    if (!book_system_->modifyBookByPosition(selected_pos, new_isbn, new_name, new_author, new_keywords, new_price,
                                   has_isbn, has_name, has_author, has_keywords, has_price)) {
         std::cout << "Invalid\n";
     }
@@ -550,8 +549,8 @@ void CommandParser::executeImport(const std::vector<std::string>& tokens) {
         return;
     }
 
-    std::string selected_isbn = account_system_->getSelectedBook();
-    if (selected_isbn.empty()) {
+    int selected_pos = account_system_->getSelectedBookPosition();
+    if (selected_pos < 0) {
         std::cout << "Invalid\n";
         return;
     }
@@ -597,8 +596,8 @@ void CommandParser::executeImport(const std::vector<std::string>& tokens) {
         return;
     }
 
-    // Import to selected book
-    if (!book_system_->importBook(selected_isbn, qty, total_cost)) {
+    // Import to selected book by position
+    if (!book_system_->importBookByPosition(selected_pos, qty, total_cost)) {
         std::cout << "Invalid\n";
     }
 }
