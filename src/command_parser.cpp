@@ -331,16 +331,16 @@ bool CommandParser::parseShowArgs(const std::vector<std::string>& tokens, int st
     for (size_t i = start; i < tokens.size(); i++) {
         const std::string& arg = tokens[i];
 
-        if (arg.substr(0, 5) == "-ISBN=") {
-            isbn = arg.substr(5);
+        if (arg.length() >= 6 && arg.substr(0, 6) == "-ISBN=") {
+            isbn = arg.substr(6);
             if (isbn.empty()) return false;
-        } else if (arg.substr(0, 6) == "-name=") {
+        } else if (arg.length() >= 6 && arg.substr(0, 6) == "-name=") {
             name = arg.substr(6);
             if (name.empty()) return false;
-        } else if (arg.substr(0, 8) == "-author=") {
+        } else if (arg.length() >= 8 && arg.substr(0, 8) == "-author=") {
             author = arg.substr(8);
             if (author.empty()) return false;
-        } else if (arg.substr(0, 9) == "-keyword=") {
+        } else if (arg.length() >= 9 && arg.substr(0, 9) == "-keyword=") {
             keyword = arg.substr(9);
             if (keyword.empty()) return false;
             // Check for multiple keywords (contains |)
@@ -450,12 +450,12 @@ bool CommandParser::parseModifyArgs(const std::vector<std::string>& tokens, int 
     for (size_t i = start; i < tokens.size(); i++) {
         const std::string& arg = tokens[i];
 
-        if (arg.substr(0, 5) == "-ISBN=") {
+        if (arg.length() >= 6 && arg.substr(0, 6) == "-ISBN=") {
             if (has_isbn) return false; // Duplicate
-            isbn = arg.substr(5);
+            isbn = arg.substr(6);
             if (isbn.empty()) return false;
             has_isbn = true;
-        } else if (arg.substr(0, 6) == "-name=") {
+        } else if (arg.length() >= 6 && arg.substr(0, 6) == "-name=") {
             if (has_name) return false;
             name = arg.substr(6);
             if (name.empty()) return false;
